@@ -1,0 +1,7 @@
+Add to store translation file: store.phrases.txt
+
+"CustomParticles"
+{
+  "en" "particle trail"
+  "hu" "particle trail"
+}
