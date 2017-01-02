@@ -20,6 +20,10 @@ int g_eCustomParticles[STORE_MAX_ITEMS][CustomParticles];
 int g_iCustomParticless = 0;
 int g_unClientParticle[MAXPLAYERS+1]={INVALID_ENT_REFERENCE,...};
 int g_unSelectedParticle[MAXPLAYERS+1]={-1,...};
+bool g_bHide[MAXPLAYERS+1]={false,...};
+bool g_bHideSelf[MAXPLAYERS+1]={false,...};
+Handle c_ShowParticles = null;
+Handle c_ShowSelfParticles = null;
 
 public Plugin myinfo =
 {
@@ -33,6 +37,13 @@ public Plugin myinfo =
 public void OnPluginStart() 
 {
   Store_RegisterHandler("CustomParticles", "effectname", CustomParticlesOnMapStart, CustomParticlesReset, CustomParticlesConfig, CustomParticlesEquip, CustomParticlesRemove, true);
+  
+  RegConsoleCmd("sm_toggleparticles", Command_Toggle_Particles, "Turn custom particles visibility ON or OFF");
+  RegConsoleCmd("sm_toggleselfparticles", Command_Toggle_Self_Particles, "Turn your particles visibility ON or OFF");
+  
+  //Register cookie
+  c_ShowParticles = RegClientCookie("ShowParticles", "Whether to show client custom particles or not", CookieAccess_Public);
+  c_ShowSelfParticles = RegClientCookie("ShowSelfParticles", "Whether to show client self custom particles or not", CookieAccess_Public);
   
   HookEvent("player_spawn", Particles_PlayerSpawn);
   HookEvent("player_death", Particles_PlayerDeath);  
@@ -166,9 +177,13 @@ void CreateCustomParticle(int client)
      
     SetVariantString("!activator");
     AcceptEntityInput(m_unEnt, "SetParent", client, m_unEnt, 0);
+    
     ActivateEntity(m_unEnt);
     
     g_unClientParticle[client] = EntIndexToEntRef(m_unEnt);
+    
+    SetEdictFlags(m_unEnt, GetEdictFlags(m_unEnt)&(~FL_EDICT_ALWAYS));
+    SDKHookEx(m_unEnt, SDKHook_SetTransmit, Hook_ParticleSetTransmit);
   }
 }
 
@@ -212,4 +227,82 @@ bool IsValidClient(int client)
     return false; 
    
   return true; 
+}
+
+public void OnClientCookiesCached(int client)
+{
+  char showParticlesPref[3];
+  char showSelfParticlesPref[3];
+  GetClientCookie(client, c_ShowParticles, showParticlesPref, sizeof(showParticlesPref));
+  GetClientCookie(client, c_ShowSelfParticles, showSelfParticlesPref, sizeof(showSelfParticlesPref));
+  
+  if (StrEqual(showParticlesPref, "0")) {
+    g_bHide[client] = true;
+  } else { //For 1 and other junk values
+    g_bHide[client] = false;
+  }
+  
+  if (StrEqual(showSelfParticlesPref, "0")) {
+    g_bHideSelf[client] = true;
+  } else { //For 1 and other junk values
+    g_bHideSelf[client] = false;
+  }
+}
+
+public Action Command_Toggle_Particles(int client, int args)
+{
+  if (!IsValidClient(client)) {
+    ReplyToCommand(client, "[STORE] Your client cannot turn off particles.");
+    return Plugin_Handled;
+  }
+  
+  //Toggle
+  g_bHide[client] = !g_bHide[client];
+  
+  if (AreClientCookiesCached(client)) {
+    SetClientCookie(client, c_ShowParticles, g_bHide[client] ? "0" : "1");
+  }
+ 
+  ReplyToCommand(client, "[STORE] Particles have now been toggled: %s", g_bHide[client] ? "OFF" : "ON");
+ 
+  return Plugin_Handled;
+}
+
+public Action Command_Toggle_Self_Particles(int client, int args)
+{
+  if (!IsValidClient(client)) {
+    ReplyToCommand(client, "[STORE] Your client cannot turn off self particles.");
+    return Plugin_Handled;
+  }
+  
+  //Toggle
+  g_bHideSelf[client] = !g_bHideSelf[client];
+  
+  if (AreClientCookiesCached(client)) {
+    SetClientCookie(client, c_ShowSelfParticles, g_bHideSelf[client] ? "0" : "1");
+  }
+ 
+  ReplyToCommand(client, "[STORE] Self particles have now been toggled: %s", g_bHideSelf[client] ? "OFF" : "ON");
+ 
+  return Plugin_Handled;
+}
+
+void setEdictFlags(int edict)
+{
+  if (GetEdictFlags(edict) & FL_EDICT_ALWAYS)
+    SetEdictFlags(edict, (GetEdictFlags(edict) ^ FL_EDICT_ALWAYS));
+} 
+
+public Action Hook_ParticleSetTransmit(int entity, int client)
+{
+  setEdictFlags(entity);
+  
+  if (g_bHide[client])
+    return Plugin_Handled;
+   
+  int m_unEnt = EntRefToEntIndex(g_unClientParticle[client]);
+  if (g_bHideSelf[client] && entity == m_unEnt)
+    return Plugin_Handled;
+    
+  return Plugin_Continue;
 }
