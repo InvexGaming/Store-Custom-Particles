@@ -1,6 +1,7 @@
 #include <sourcemod> 
 #include <sdktools>
 #include <sdkhooks>
+#include <cstrike>
 #include <store> 
 #include <clientprefs>
 #include <zephstocks> 
@@ -30,7 +31,7 @@ public Plugin myinfo =
   name = "Custom Particles",
   author = "Invex | Byte",
   description = "Add Custom Particles to Zephyrus Store",
-  version = "1.00",
+  version = "1.01",
   url = "http://www.invexgaming.com.au"
 }
 
@@ -46,7 +47,8 @@ public void OnPluginStart()
   c_ShowSelfParticles = RegClientCookie("ShowSelfParticles", "Whether to show client self custom particles or not", CookieAccess_Public);
   
   HookEvent("player_spawn", Particles_PlayerSpawn);
-  HookEvent("player_death", Particles_PlayerDeath);  
+  HookEvent("player_death", Particles_PlayerDeath);
+  HookEvent("player_team", Particles_PlayerTeam);
 } 
 
 public void CustomParticlesOnMapStart() 
@@ -216,6 +218,21 @@ public Action Particles_PlayerDeath(Handle event, const char[] name, bool dontBr
   int client = GetClientOfUserId(GetEventInt(event, "userid"));
   
   if(IsValidClient(client))
+    RemoveCustomParticle(client);
+  
+  return Plugin_Continue;
+}
+
+public Action Particles_PlayerTeam(Event event, const char[] name, bool dontBroadcast)
+{
+  int client = GetClientOfUserId(event.GetInt("userid"));
+  
+  if(!IsValidClient(client))
+    return Plugin_Handled;
+  
+  int toTeam = event.GetInt("team");
+  
+  if (toTeam == CS_TEAM_SPECTATOR || toTeam == CS_TEAM_NONE)
     RemoveCustomParticle(client);
   
   return Plugin_Continue;
